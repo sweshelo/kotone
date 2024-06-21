@@ -1,0 +1,24 @@
+{
+  "name": "kotone",
+  "version": "0.0.0",
+  "description": "love kotone",
+  "main": "index.js",
+  "author": "sweshelo",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.14.7",
+    "nodemon": "^3.1.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2"
+  },
+  "dependencies": {
+    "@langchain/anthropic": "^0.2.1",
+    "@langchain/core": "^0.2.8",
+    "@langchain/openai": "^0.1.3",
+    "@langchain/pinecone": "^0.0.7",
+    "@pinecone-database/pinecone": "^2.2.2",
+    "dotenv": "^16.4.5",
+    "langchain": "^0.2.5",
+    "openai": "^4.52.0"
+  }
+}
