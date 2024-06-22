@@ -1,6 +1,12 @@
 import OpenAI from "openai";
 import "dotenv/config";
 import { ChatCompletionMessageParam } from "openai/resources";
+import { fetchUrl } from "./scrape";
+
+export type AiResponseChunk = {
+  type: "chunk" | "guide";
+  value: string;
+};
 
 export async function* main(messages: ChatCompletionMessageParam[]) {
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
@@ -81,7 +87,6 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
 
   let toolCallsDetected = false;
   let toolCallsParams: { name: string; arguments: string }[] = [];
-  let isHeaderReturned = false;
 
   for await (const message of chat) {
     const delta = message.choices[0].delta;
@@ -102,27 +107,52 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
         }
         toolCallsParams[index].arguments += functionArguments;
       });
-
-      if (!isHeaderReturned){
-        yield "TOOL_CALLS";
-        isHeaderReturned = true
-      }
-    } else {
-      if (!isHeaderReturned){
-        yield "NORMAL";
-        isHeaderReturned = true
-      }
     }
 
     if (!toolCallsDetected) {
       if (delta.content) {
-        yield delta.content;
+        yield {
+          type: "chunk",
+          value: delta.content,
+        };
       }
     }
   }
 
   if (toolCallsDetected) {
-    yield toolCallsParams;
+    for (const tool of toolCallsParams) {
+      const args = JSON.parse(tool.arguments);
+      switch (tool.name) {
+        case "fetch_url":
+          for await (const url of args.urls) {
+            yield {
+              type: "guide",
+              value: `! Fetching ${url} ...\n`,
+            };
+            const result = fetchUrl(url);
+          }
+          break;
+        case "search_web":
+          yield {
+            type: "guide",
+            value: `! Google investigating on ${args.query}\n`,
+          }
+          break;
+        case "escalation_intelligent_model":
+          yield {
+            type: "guide",
+            value: `! GPT-4o will respond.\n`,
+          }
+          break;
+        case "UNKNOWN":
+        default:
+          yield {
+            type: "guide",
+            value: `! Error! Unknown tool called.`,
+          }
+          console.log(`Error: ${tool.name} called - ${tool.arguments}`);
+          break;
+      }
+    }
   }
 }
-
