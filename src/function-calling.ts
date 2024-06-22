@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import "dotenv/config";
+import { ChatCompletionMessageParam } from "openai/resources";
 
-async function main() {
+export async function* main(messages: ChatCompletionMessageParam[]) {
   const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     {
       type: "function",
@@ -73,46 +74,55 @@ async function main() {
 
   const chat = await openai.chat.completions.create({
     model: "gpt-3.5-turbo",
-    messages: [
-      {
-        role: "user",
-        content: "AIで画像生成を行なうとき、どのような指示をするのが適切でしょうか。",
-      },
-    ],
+    messages,
     tools,
     stream: true,
   });
 
   let toolCallsDetected = false;
-  let toolCallsParams: { name: string, arguments: string }[] = [];
+  let toolCallsParams: { name: string; arguments: string }[] = [];
+  let isHeaderReturned = false;
 
   for await (const message of chat) {
     const delta = message.choices[0].delta;
 
-    if ("tool_calls" in delta && Array.isArray(delta.tool_calls) && delta.tool_calls.length > 0) {
+    if (
+      "tool_calls" in delta &&
+      Array.isArray(delta.tool_calls) &&
+      delta.tool_calls.length > 0
+    ) {
       toolCallsDetected = true;
-      delta.tool_calls.forEach(call => {
+      delta.tool_calls.forEach((call) => {
         const index = call.index;
-        const functionName = call.function?.name ?? 'UNKNOWN';
-        const functionArguments = call.function?.arguments ?? '';
+        const functionName = call.function?.name ?? "UNKNOWN";
+        const functionArguments = call.function?.arguments ?? "";
 
         if (!toolCallsParams[index]) {
-          toolCallsParams[index] = { name: functionName, arguments: '' };
+          toolCallsParams[index] = { name: functionName, arguments: "" };
         }
         toolCallsParams[index].arguments += functionArguments;
       });
+
+      if (!isHeaderReturned){
+        yield "TOOL_CALLS";
+        isHeaderReturned = true
+      }
+    } else {
+      if (!isHeaderReturned){
+        yield "NORMAL";
+        isHeaderReturned = true
+      }
     }
 
     if (!toolCallsDetected) {
       if (delta.content) {
-        process.stdout.write(delta.content);
+        yield delta.content;
       }
     }
   }
 
   if (toolCallsDetected) {
-    console.log(toolCallsParams);
+    yield toolCallsParams;
   }
 }
 
-main();
