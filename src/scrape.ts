@@ -22,8 +22,14 @@ export async function fetchUrl(url: string) {
         .map((r) => r.trim())
         .join("\n");
 
-    return main ?? "";
+    return {
+      url,
+      docs: main ?? 'Error. Fail to fetch contents.'
+    };
   } catch (e) {
-    return "Nothing to fetch."
+    return {
+      url,
+      docs: 'Error. Fail to fetch contents.'
+    }
   }
 }

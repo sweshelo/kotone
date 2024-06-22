@@ -82,15 +82,20 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
   });
 
   const chat = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-3.5-turbo",
     messages,
     tools,
     stream: true,
   });
 
+  type Source = {
+    url: string;
+    docs: string;
+  };
+
   let toolCallsDetected = false;
   let toolCallsParams: { name: string; arguments: string }[] = [];
-  let docs: string[] = [];
+  let docs: Source[] = [];
 
   for await (const message of chat) {
     const delta = message.choices[0].delta;
@@ -157,6 +162,12 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
             value: `! GPT-4o will respond.\n`,
           };
           break;
+        case "generate_image":
+          yield {
+            type: "guide",
+            value: `画像の生成が要求されました。現時点では画像の生成は非対応ですが、GPTは次の内容で画像を生成するように解釈しました。プロンプト: ${args.prompt}`,
+          };
+          return;
         case "UNKNOWN":
         default:
           yield {
@@ -164,21 +175,20 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
             value: `! Error! The specified tool could not be found or is currently unavailable.\n`,
           };
           console.log(`Error: ${tool.name} called - ${tool.arguments}`);
-          docs.push(
-            "Error! The specified tool could not be found or is currently unavailable."
-          );
           break;
       }
     }
 
-    console.log('Calling GPT-4o')
+    console.log("Calling GPT-4o");
     const chat = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo",
       messages: [
         ...messages,
         {
           role: "system",
-          content: `Additional Contexts Here: ${docs.join()}`,
+          content: `Web検索結果: ${docs
+            .map((s) => `source: ${s.url}\ncontents: ${s.docs}`)
+            .join()}`,
         },
       ],
       stream: true,
@@ -191,7 +201,6 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
           type: "chunk",
           value: delta.content,
         };
-        console.log(delta.content)
       }
     }
   }
