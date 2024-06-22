@@ -12,7 +12,7 @@ export async function googleSearch(query: string) {
       },
     });
 
-    const urls = response.data.items.map((item: any) => item.link).slice(0, 3)
+    const urls = response.data.items.map((item: any) => item.link).slice(0, 1)
     return urls;
   } catch (error) {
     console.error("Error: Google Search fail.", error);
