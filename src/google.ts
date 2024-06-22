@@ -1,4 +1,5 @@
 import axios from "axios";
+import { fetchUrl } from "./scrape";
 
 export async function googleSearch(query: string) {
   const uri = `https://www.googleapis.com/customsearch/v1`;
@@ -11,7 +12,8 @@ export async function googleSearch(query: string) {
       },
     });
 
-    return response.data.items.map((item: any) => item.link)
+    const urls = response.data.items.map((item: any) => item.link).slice(0, 3)
+    return urls;
   } catch (error) {
     console.error("Error: Google Search fail.", error);
   }

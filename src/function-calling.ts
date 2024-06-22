@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import "dotenv/config";
 import { ChatCompletionMessageParam } from "openai/resources";
 import { fetchUrl } from "./scrape";
+import { googleSearch } from "./google";
 
 export type AiResponseChunk = {
   type: "chunk" | "guide";
@@ -64,6 +65,7 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
         },
       },
     },
+    /*
     {
       type: "function",
       function: {
@@ -72,6 +74,7 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
           "Attempt to generate responses using the latest models to generate better quality responses",
       },
     },
+    */
   ] as const;
 
   const openai = new OpenAI({
@@ -79,7 +82,7 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
   });
 
   const chat = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o",
     messages,
     tools,
     stream: true,
@@ -87,6 +90,7 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
 
   let toolCallsDetected = false;
   let toolCallsParams: { name: string; arguments: string }[] = [];
+  let docs: string[] = [];
 
   for await (const message of chat) {
     const delta = message.choices[0].delta;
@@ -120,38 +124,74 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
   }
 
   if (toolCallsDetected) {
+    let urls: string[] = [];
     for (const tool of toolCallsParams) {
       const args = JSON.parse(tool.arguments);
       switch (tool.name) {
-        case "fetch_url":
-          for await (const url of args.urls) {
-            yield {
-              type: "guide",
-              value: `! Fetching ${url} ...\n`,
-            };
-            const result = fetchUrl(url);
-          }
-          break;
         case "search_web":
           yield {
             type: "guide",
             value: `! Google investigating on ${args.query}\n`,
+          };
+          urls = await googleSearch(args.query);
+          yield {
+            type: "guide",
+            value: `! Google Complete.`,
+          };
+        case "fetch_url":
+          for await (const url of urls.concat(args.urls)) {
+            yield {
+              type: "guide",
+              value: `! Fetching ${url} ...\n`,
+            };
+            docs.push(await fetchUrl(url));
+            yield {
+              type: "guide",
+              value: `! Fetch Complete.`,
+            };
           }
           break;
         case "escalation_intelligent_model":
           yield {
             type: "guide",
             value: `! GPT-4o will respond.\n`,
-          }
+          };
           break;
         case "UNKNOWN":
         default:
           yield {
             type: "guide",
-            value: `! Error! Unknown tool called.`,
-          }
+            value: `! Error! The specified tool could not be found or is currently unavailable.\n`,
+          };
           console.log(`Error: ${tool.name} called - ${tool.arguments}`);
+          docs.push(
+            "Error! The specified tool could not be found or is currently unavailable."
+          );
           break;
+      }
+    }
+
+    console.log('Calling GPT-4o')
+    const chat = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        ...messages,
+        {
+          role: "system",
+          content: `Additional Contexts Here: ${docs.join()}`,
+        },
+      ],
+      stream: true,
+    });
+
+    for await (const message of chat) {
+      const delta = message.choices[0].delta;
+      if (delta.content) {
+        yield {
+          type: "chunk",
+          value: delta.content,
+        };
+        console.log(delta.content)
       }
     }
   }
