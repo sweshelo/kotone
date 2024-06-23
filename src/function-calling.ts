@@ -144,7 +144,7 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
             value: `! Google Complete.`,
           };
         case "fetch_url":
-          for await (const url of urls.concat(args.urls)) {
+          for await (const url of urls.concat(args.urls).filter(e => e)) {
             yield {
               type: "guide",
               value: `! Fetching ${url} ...\n`,
@@ -180,28 +180,35 @@ export async function* main(messages: ChatCompletionMessageParam[]) {
     }
 
     console.log("Calling GPT-4o");
-    const chat = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        ...messages,
-        {
-          role: "system",
-          content: `Web検索結果: ${docs
-            .map((s) => `source: ${s.url}\ncontents: ${s.docs}`)
-            .join()}`,
-        },
-      ],
-      stream: true,
-    });
+    try {
+      const chat = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          ...messages,
+          {
+            role: "system",
+            content: `Web検索結果: ${docs
+              .map((s) => `source: ${s.url}\ncontents: ${s.docs}`)
+              .join()}`,
+          },
+        ],
+        stream: true,
+      });
 
-    for await (const message of chat) {
-      const delta = message.choices[0].delta;
-      if (delta.content) {
-        yield {
-          type: "chunk",
-          value: delta.content,
-        };
+      for await (const message of chat) {
+        const delta = message.choices[0].delta;
+        if (delta.content) {
+          yield {
+            type: "chunk",
+            value: delta.content,
+          };
+        }
       }
+    } catch (e) {
+      yield {
+        type: "guide",
+        value: `エラーが発生しました。 ${(e as Error).message}`,
+      };
     }
   }
 }
