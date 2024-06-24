@@ -3,6 +3,8 @@ import "dotenv/config";
 import { ChatCompletionMessageParam } from "openai/resources";
 import { fetchUrl } from "./scrape";
 import { googleSearch } from "./google";
+import { tools as _tools } from "./tools/tools";
+import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 export type AiResponseChunk = {
   type: "chunk" | "guide";
@@ -10,72 +12,7 @@ export type AiResponseChunk = {
 };
 
 export async function* main(messages: ChatCompletionMessageParam[]) {
-  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-    {
-      type: "function",
-      function: {
-        name: "search_web",
-        description: "Search on the Web",
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description:
-                "Compose query for search with space-separated words",
-            },
-          },
-          required: ["query"],
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "fetch_url",
-        description: "Access the URL in the prompt",
-        parameters: {
-          type: "object",
-          properties: {
-            urls: {
-              type: "array",
-              items: { type: "string" },
-              description: "URLs array included in the prompt",
-            },
-          },
-          require: ["urls"],
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "generate_image",
-        description: "Generate image",
-        parameters: {
-          type: "object",
-          properties: {
-            prompt: {
-              type: "string",
-              description:
-                "If a specific drawing prompt is specified, excerpt it. Otherwise, return a new prompt for drawing.",
-            },
-          },
-          require: ["prompt"],
-        },
-      },
-    },
-    /*
-    {
-      type: "function",
-      function: {
-        name: "escalation_intelligent_model",
-        description:
-          "Attempt to generate responses using the latest models to generate better quality responses",
-      },
-    },
-    */
-  ] as const;
+  const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = _tools.map(convertToOpenAITool);
 
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
